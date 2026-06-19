@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>八二三砲戰：料羅灣搶灘戰戰役版</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background-color: #0d1520;
+            font-family: 'Microsoft JhengHei', 'Arial Black', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 430px; 
+            height: 90vh; 
+            max-height: 720px; 
+            background-color: #cbd5e1;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.8);
+            border-radius: 24px;
+            overflow: hidden;
+            border: 4px solid #334155;
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 頂部陣營資源 UI */
+        #top-ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .resource-bar {
+            display: flex;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 2px solid #3b82f6;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 900;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            backdrop-filter: blur(6px);
+        }
+        .icon-box {
+            margin-right: 6px;
+            font-size: 14px;
+        }
+        #blue-camp { border-color: #10b981; color: #34d399; }
+        #red-camp { border-color: #ef4444; color: #f87171; }
+        
+        /* 底部戰術標語提示 */
+        #bottom-banner {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: linear-gradient(to right, #15803d, #166534);
+            color: #ffffff;
+            text-align: center;
+            padding: 10px 0;
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 2px #000;
+            border-top: 3px solid #14532d;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.5);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* 歷史劇情過場與結算視窗 */
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 15, 25, 0.98);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+            z-index: 20;
+            text-align: center;
+            padding: 30px;
+        }
+        .overlay-screen.active { opacity: 1; pointer-events: auto; }
+        .overlay-screen h1 { font-size: 1.8rem; margin-bottom: 12px; color: #f59e0b; text-shadow: 0 0 10px rgba(245,158,11,0.5); }
+        .overlay-screen h2 { font-size: 1.2rem; color: #f87171; margin-bottom: 20px; font-weight: bold; }
+        .story-text { font-size: 0.95rem; color: #cbd5e1; line-height: 1.7; text-align: justify; background: #1e293b; padding: 20px; border-radius: 12px; border-left: 5px solid #f59e0b; margin-bottom: 25px; }
+        
+        .overlay-screen button {
+            background: #16a34a; color: #fff; border: none; padding: 14px 50px;
+            font-size: 1.1rem; border-radius: 30px; cursor: pointer; font-weight: 900;
+            box-shadow: 0 6px 20px rgba(22,163,74,0.5);
+            letter-spacing: 1px;
+        }
+        .overlay-screen button:hover { background: #15803d; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- 頂部陣營狀態欄 -->
+        <div id="top-ui">
+            <div id="blue-camp" class="resource-bar">
+                <span class="icon-box">🇹🇼</span>
+                <span id="cannon-growth-ui">灘頭陣地: 1 聯裝火砲</span>
+            </div>
+            <div id="red-camp" class="resource-bar">
+                <span class="icon-box">💥</span>
+                <span id="wave-ui">戰役關卡: 1</span>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+        <div id="bottom-banner">火力掩護兩側 LVT 運補車 🚢 升級防線！</div>
+
+        <!-- 歷史劇情過場視窗 -->
+        <div id="story-screen" class="overlay-screen active">
+            <h1 id="story-title">第一戰：突襲翠谷</h1>
+            <h2 id="story-subtitle">—— 1958年8月23日傍晚 ——</h2>
+            <div class="story-text" id="story-content">
+                敵軍毫無預警發動瘋狂砲擊，金門防區瞬間陷入一片火海！翠谷水上餐廳遭到密集彈雨襲擊，趙家驤、章傑、吉星文三位副司令官不幸壯烈殉職。面對這波排山倒海而來的猝然奇襲，立刻進入灘頭陣地，還擊敵軍！
+            </div>
+            <button onclick="startBattle()">進入陣地還擊</button>
+        </div>
+
+        <!-- 結算互動視窗 -->
+        <div id="game-over-screen" class="overlay-screen">
+            <h1 id="result-title">🎉 戰役推進成功！</h1>
+            <p id="result-desc" style="margin-bottom: 25px; color: #94a3b8; line-height: 1.6;">成功守住金門灘頭陣地，粉碎敵方封鎖陰謀！</p>
+            <button id="result-btn" onclick="nextStage()">邁向下一戰</button>
+        </div>
+    </div>
+
+<script>
+    // 劇情數據庫
+    const stories = {
+        1: {
+            title: "第一戰：突襲翠谷",
+            subtitle: "—— 1958年8月23日 18:30 ——",
+            content: "敵軍毫無預警發動瘋狂砲擊，金門防區瞬間陷入一片火海！翠谷水上餐廳遭到密集彈雨襲擊，吉星文將軍等長官不幸壯烈殉職。面對排山倒海而來的猝然奇襲，立刻進入灘頭陣地，穩住防線！",
+            btn: "進入陣地還擊"
+        },
+        2: {
+            title: "第二戰：死守四四三高地",
+            subtitle: "—— 烽火連天 彈落如雨 ——",
+            content: "砲火瘋狂傾瀉，小金門遭到全面封鎖。第9師第27團第1營營長郝柏村率領全體官兵死守掩體。在幾萬發砲彈無情轟炸下，官兵沉著指揮、堅守反擊，絕不退後一步！",
+            btn: "奉命死守陣地"
+        },
+        3: {
+            title: "第三戰：血染料羅灣",
+            subtitle: "—— 海上後勤生死線 ——",
+            content: "敵軍企圖切斷金門的海上物資補給。海軍中字號登陸手與 LVT 閃電兩棲登陸車（水鴨子）冒著漫天彈雨強行靠岸！請全力開火掩護登陸車，將關鍵的砲彈物資接應上岸！",
+            btn: "火力掩護運補"
+        },
+        4: {
+            title: "終結戰：八吋大砲怒吼",
+            subtitle: "—— 扭轉戰局的轟雷巨砲 ——",
+            content: "美軍緊急運抵傳奇的「八吋巨砲」。隨著國軍一聲令下，巨砲向對岸陣地發出雷霆般的怒吼！強大的反擊威力瞬間壓制敵方砲火。這是最後一波總攻擊，粉碎對方的封鎖！",
+            btn: "發射八吋巨砲"
+        }
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('game-container');
+    const storyScreen = document.getElementById('story-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    
+    // UI 文字綁定
+    const storyTitle = document.getElementById('story-title');
+    const storySubtitle = document.getElementById('story-subtitle');
+    const storyContent = document.getElementById('story-content');
+    const resultTitle = document.getElementById('result-title');
+    const resultDesc = document.getElementById('result-desc');
+    const resultBtn = document.getElementById('result-btn');
+
+    let gameActive = false;
+    let cannonPositionX = 0;
+    let targetCannonPositionX = 0;
+    
+    let spawnTimer = 0;
+    let enemyWaveTimer = 0;
+    let supplySpawnTimer = 0;
+    
+    let playerBullets = [];     
+    let redMatrixMobs = [];     
+    let totalitarianBosses = []; 
+    let gates = [];             
+    let supplyDrops = [];       
+
+    let cannonCount = 1;        
+    let gameLevel = 1;
+    const maxLevels = 4;
+
+    let trackX = 0;      
+    let trackWidth = 0;  
+    let sideWidth = 0;   
+
+    let INVASION_SPEED = 0.65; 
+    const LOGISTICS_FALL_SPEED = 0.85; 
+
+    function resizeCanvas() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        
+        trackWidth = canvas.width * 0.68;
+        sideWidth = (canvas.width - trackWidth) / 2;
+        trackX = sideWidth;
+
+        if(cannonPositionX === 0) {
+            cannonPositionX = canvas.width / 2;
+            targetCannonPositionX = canvas.width / 2;
+        }
+        initMapGates();
+    }
+
+    function initMapGates() {
+        gates = [
+            {
+                type: 'multiply',
+                x: trackX + trackWidth * 0.15,
+                y: canvas.height * 0.5,
+                width: trackWidth * 0.5,
+                height: 32,
+                value: 2,
+                speed: 1.0 + (gameLevel * 0.15),
+                dir: 1,
+                label: "觀測修正 X2",
+                color: 'rgba(16, 185, 129, 0.85)',
+                stroke: '#047857'
+            }
+        ];
+    }
+
+    function loadStory(lvl) {
+        const data = stories[lvl];
+        storyTitle.innerText = data.title;
+        storySubtitle.innerText = data.subtitle;
+        storyContent.innerText = data.content;
+        storyScreen.querySelector('button').innerText = data.btn;
+        storyScreen.classList.add('active');
+    }
+
+    function startBattle() {
+        storyScreen.classList.remove('active');
+        gameOverScreen.classList.remove('active');
+        
+        playerBullets = [];
+        redMatrixMobs = [];
+        totalitarianBosses = [];
+        supplyDrops = [];
+        enemyWaveTimer = 0;
+        
+        // 隨關卡提升難度
+        INVASION_SPEED = 0.55 + (gameLevel * 0.12);
+        
+        document.getElementById('cannon-growth-ui').innerText = `灘頭陣地: ${cannonCount} 聯裝火砲`;
+        document.getElementById('wave-ui').innerText = `戰役關卡: ${gameLevel} / ${maxLevels}`;
+        
+        resizeCanvas();
+        spawnRedIronCurtain();
+        gameActive = true;
+    }
+
+    function spawnMovingLogistics() {
+        const isLeft = Math.random() > 0.5;
+        const x = isLeft ? (sideWidth / 2) - 18 : trackX + trackWidth + (sideWidth / 2) - 18;
+        const y = -40; 
+        
+        supplyDrops.push({
+            x,
+            y,
+            width: 36,
+            height: 36,
+            hp: 3, 
+            label: "🚢",
+            isLeft
+        });
+    }
+
+    function spawnRedIronCurtain() {
+        const rows = 3 + gameLevel; // 關卡越高，砲彈層數越多      
+        const cols = 5;       
+        const colSpacing = trackWidth / (cols + 1);
+        
+        for (let r = 0; r < rows; r++) {
+            for (let c = 1; c <= cols; c++) {
+                redMatrixMobs.push({
+                    x: trackX + (c * colSpacing),
+                    y: 60 - (r * 32), 
+                    speedY: INVASION_SPEED
+                });
+            }
+        }
+
+        // 敵方海岸巨型碉堡
+        totalitarianBosses.push({
+            x: trackX + trackWidth * 0.5,
+            y: -40,
+            speedY: INVASION_SPEED * 0.55,
+            hp: 80 + (gameLevel * 50),                 
+            maxHp: 80 + (gameLevel * 50),
+            size: 28 + gameLevel
+        });
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    
+    function handleMove(e) {
+        if(!gameActive) return;
+        const rect = canvas.getBoundingClientRect();
+        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let relativeX = clientX - rect.left;
+        targetCannonPositionX = Math.max(15, Math.min(canvas.width - 15, relativeX));
+    }
+
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('touchmove', (e) => {
+        handleMove(e);
+        if (gameActive) e.preventDefault();
+    }, { passive: false });
+
+    function fireDemocraticBullet() {
+        const spread = 16; 
+        const startOffset = -((cannonCount - 1) * spread) / 2;
+
+        for (let k = 0; k < cannonCount; k++) {
+            let angleX = (Math.random() - 0.5) * 0.1;
+            
+            if (cannonPositionX < trackX) angleX += 0.15;
+            if (cannonPositionX > trackX + trackWidth) angleX -= 0.15;
+
+            playerBullets.push({
+                x: cannonPositionX + startOffset + (k * spread),
+                y: canvas.height - 100,
+                speedY: -4.6, 
+                speedX: angleX,
+                hasMultiplied: false,
+                size: gameLevel === 4 ? 7 : 5 // 第四關八吋大砲子彈變大
+            });
+        }
+    }
+
+    function update() {
+        if (!gameActive) return;
+
+        cannonPositionX += (targetCannonPositionX - cannonPositionX) * 0.25;
+
+        spawnTimer++;
+        if (spawnTimer % 9 === 0) fireDemocraticBullet();
+
+        enemyWaveTimer++;
+
+        // 兩側運補車前進
+        for (let s = supplyDrops.length - 1; s >= 0; s--) {
+            let box = supplyDrops[s];
+            box.y += LOGISTICS_FALL_SPEED; 
+            if (box.y > canvas.height) supplyDrops.splice(s, 1); 
+        }
+
+        if (supplySpawnTimer % 220 === 0 && supplyDrops.length < 2) spawnMovingLogistics();
+        supplySpawnTimer++;
+
+        // 觀測光柵移動
+        gates.forEach(gate => {
+            gate.x += gate.speed * gate.dir;
+            if (gate.x <= trackX + 4 || gate.x + gate.width >= trackX + trackWidth - 4) {
+                gate.dir *= -1;
+            }
+        });
+
+        // 子彈衝突
+        for (let i = playerBullets.length - 1; i >= 0; i--) {
+            let b = playerBullets[i];
+            b.y += b.speedY;
+            b.x += b.speedX;
+
+            if (b.x <= 5 || b.x >= canvas.width - 5) { b.speedX *= -1; }
+
+            // 運補物資車靠岸判定
+            for (let s = supplyDrops.length - 1; s >= 0; s--) {
+                let box = supplyDrops[s];
+                if (b.x > box.x && b.x < box.x + box.width &&
+                    b.y > box.y && b.y < box.y + box.height) {
+                    box.hp--; 
+                    playerBullets.splice(i, 1); 
+                    if (box.hp <= 0) {
+                        cannonCount = Math.min(5, cannonCount + 1);
+                        document.getElementById('cannon-growth-ui').innerText = `灘頭陣地: ${cannonCount} 聯裝火砲`;
+                        supplyDrops.splice(s, 1);
+                    }
+                    break;
+                }
+            }
+            if (!playerBullets[i]) continue;
+
+            // 倍增
+            if (!b.hasMultiplied) {
+                gates.forEach(gate => {
+                    if (b.x > gate.x && b.x < gate.x + gate.width &&
+                        b.y > gate.y && b.y < gate.y + gate.height) {
+                        b.hasMultiplied = true;
+                        playerBullets.push({
+                            x: b.x + 8, y: b.y - 4, speedY: b.speedY, speedX: b.speedX + 0.2, hasMultiplied: true, size: b.size
+                        });
+                    }
+                });
+            }
+
+            if (b.y < 45) playerBullets.splice(i, 1);
+        }
+
+        // 敵方推進
+        for (let j = redMatrixMobs.length - 1; j >= 0; j--) {
+            let r = redMatrixMobs[j];
+            r.y += r.speedY;
+            if (r.y >= canvas.height - 110) { endGame(false); return; }
+        }
+
+        for (let b = totalitarianBosses.length - 1; b >= 0; b--) {
+            let boss = totalitarianBosses[b];
+            boss.y += boss.speedY;
+            if (boss.y >= canvas.height - 120) { endGame(false); return; }
+        }
+
+        // 對撞
+        for (let i = playerBullets.length - 1; i >= 0; i--) {
+            let b = playerBullets[i];
+            
+            for (let j = redMatrixMobs.length - 1; j >= 0; j--) {
+                let r = redMatrixMobs[j];
+                if (Math.hypot(b.x - r.x, b.y - r.y) < 16) {
+                    playerBullets.splice(i, 1);
+                    redMatrixMobs.splice(j, 1);
+                    break;
+                }
+            }
+            if (!playerBullets[i]) continue;
+
+            for (let k = totalitarianBosses.length - 1; k >= 0; k--) {
+                let boss = totalitarianBosses[k];
+                if (Math.hypot(b.x - boss.x, b.y - boss.y) < boss.size + 5) {
+                    playerBullets.splice(i, 1);
+                    boss.hp -= (gameLevel === 4 ? 8 : 5); 
+                    if (boss.hp <= 0) totalitarianBosses.splice(k, 1);
+                    break;
+                }
+            }
+        }
+
+        // 通關
+        if (redMatrixMobs.length === 0 && totalitarianBosses.length === 0 && enemyWaveTimer > 60) {
+            endGame(true);
+        }
+    }
+
+    function draw() {
+        ctx.fillStyle = '#b45309'; ctx.fillRect(0, 0, canvas.width, canvas.height); // 灘頭
+        ctx.fillStyle = '#d97706'; ctx.fillRect(trackX, 0, trackWidth, canvas.height); // 陣地
+
+        // 戰壕
+        ctx.fillStyle = '#b45309';
+        for (let h = 90; h < canvas.height; h += 130) { ctx.fillRect(trackX, h, trackWidth, 6); }
+
+        // 料羅灣海域
+        ctx.fillStyle = '#1d4ed8';
+        ctx.fillRect(0, 0, sideWidth, canvas.height);
+        ctx.fillRect(trackX + trackWidth, 0, sideWidth, canvas.height);
+
+        // LVT 運補車
+        supplyDrops.forEach(box => {
+            ctx.fillStyle = '#15803d'; ctx.fillRect(box.x, box.y, box.width, box.height);
+            ctx.strokeStyle = '#fef08a'; ctx.lineWidth = 2; ctx.strokeRect(box.x, box.y, box.width, box.height);
+            ctx.fillStyle = '#ffffff'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(box.label, box.x + box.width / 2, box.y + box.height / 2 - 3);
+        });
+
+        // 敵方大本營
+        ctx.fillStyle = '#991b1b'; ctx.fillRect(trackX, 0, trackWidth, 45);
+        ctx.fillStyle = '#ffffff'; ctx.font = '900 13px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('💥 敵軍瘋狂砲擊陣地 💥', trackX + trackWidth / 2, 28);
+
+        // 光柵
+        gates.forEach(gate => {
+            ctx.fillStyle = gate.color; ctx.fillRect(gate.x, gate.y, gate.width, gate.height);
+            ctx.strokeStyle = gate.stroke; ctx.lineWidth = 3; ctx.strokeRect(gate.x, gate.y, gate.width, gate.height);
+            ctx.fillStyle = '#ffffff'; ctx.font = '900 14px Arial'; ctx.textAlign = 'center';
+            ctx.fillText(gate.label, gate.x + gate.width / 2, gate.y + gate.height / 2 + 5);
+        });
+
+        // 我方火砲彈幕
+        playerBullets.forEach(b => {
+            ctx.fillStyle = gameLevel === 4 ? '#f97316' : '#eab308';
+            ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(b.x, b.y, b.size * 0.5, 0, Math.PI * 2); ctx.fill();
+        });
+
+        // 敵方來襲砲彈 💣
+        ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        redMatrixMobs.forEach(r => { ctx.fillText('💣', r.x, r.y); });
+
+        // 敵方大型碉堡 🏯
+        totalitarianBosses.forEach(boss => {
+            ctx.fillStyle = '#374151'; ctx.fillRect(boss.x - boss.size, boss.y - boss.size, boss.size * 2, boss.size * 2);
+            ctx.strokeStyle = '#991b1b'; ctx.lineWidth = 3; ctx.strokeRect(boss.x - boss.size, boss.y - boss.size, boss.size * 2, boss.size * 2);
+            ctx.fillStyle = '#ffffff'; ctx.font = '20px sans-serif'; ctx.fillText('🏯', boss.x, boss.y + 2);
+
+            // 血條
+            const barW = boss.size * 1.8;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(boss.x - barW/2, boss.y - boss.size - 12, barW, 4);
+            ctx.fillStyle = '#dc2626'; ctx.fillRect(boss.x - barW/2, boss.y - boss.size - 12, barW * (boss.hp / boss.maxHp), 4);
+        });
+
+        // 我方砲臺
+        ctx.save(); ctx.translate(cannonPositionX, canvas.height - 75);
+        const spread = 16; const startOffset = -((cannonCount - 1) * spread) / 2;
+        for (let k = 0; k < cannonCount; k++) {
+            let currentOffset = startOffset + (k * spread);
+            ctx.fillStyle = '#14532d'; ctx.fillRect(currentOffset - 6, -18, 12, 26);
+            ctx.fillStyle = '#166534'; ctx.fillRect(currentOffset - 4, -14, 8, 22);
+            ctx.fillStyle = '#fef08a'; ctx.fillRect(currentOffset - 4, -18, 8, 3);
+        }
+        ctx.fillStyle = '#1e293b'; ctx.fillRect(startOffset - 14, 8, ((cannonCount - 1) * spread) + 28, 12);
+        ctx.restore();
+    }
+
+    function endGame(isWin) {
+        gameActive = false;
+        if (isWin) {
+            if (gameLevel < maxLevels) {
+                resultTitle.innerText = "🏆 戰役捷報！";
+                resultDesc.innerText = `成功瓦解敵方本波攻勢！防線火砲已保留，準備挺進下一場歷史戰役。`;
+                resultBtn.innerText = "邁向下一戰";
+            } else {
+                resultTitle.innerText = "🎖️ 八二三砲戰全面大勝！";
+                resultDesc.innerText = "金門保衛戰取得輝煌勝利！八吋巨砲成功壓制對岸，粉碎了封鎖陰謀，守護了台海和平！";
+                resultBtn.innerText = "重讀歷史戰役";
+            }
+        } else {
+            resultTitle.innerText = "💥 陣地不幸失守";
+            resultDesc.innerText = "砲火突破了最後防線。請重整旗鼓，再次掩護 LVT 運補車強行靠岸！";
+            resultBtn.innerText = "重新發動防衛";
+        }
+        gameOverScreen.classList.add('active');
+    }
+
+    function nextStage() {
+        if (resultBtn.innerText === "重讀歷史戰役") {
+            gameLevel = 1;
+            cannonCount = 1;
+        } else if (resultTitle.innerText.includes("戰役捷報")) {
+            gameLevel++;
+        } else {
+            // 失敗重來，重置火砲數
+            cannonCount = 1;
+        }
+        gameOverScreen.classList.remove('active');
+        loadStory(gameLevel);
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    resizeCanvas();
+    loadStory(gameLevel);
+    loop();
+</script>
+</body>
+</html>
